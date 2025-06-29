@@ -4,8 +4,12 @@
 #include <SystemInfo.h> // For BSystemInfo, if used for modern Haiku CPU stats
 #include <kernel/OS.h>  // For get_system_info, system_info, cpu_info
 
+#include <string.h> // For memset, if used for initialization
+
 CPUView::CPUView(BRect frame)
     : BView(frame, "CPUView", B_FOLLOW_LEFT_RIGHT | B_FOLLOW_TOP, B_WILL_DRAW | B_PULSE_NEEDED),
+      fPreviousIdleTime(NULL), // Initialize pointer
+      fCpuCount(0),
       fFirstTime(true) {
 
     SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
@@ -26,18 +30,27 @@ CPUView::CPUView(BRect frame)
     overallBox->AddChild(grid->View());
     layout->AddView(overallBox);
 
-    // Initialize previous times
+    // Initialize CPU count and previous times
     system_info sysInfo;
     if (get_system_info(&sysInfo) == B_OK) {
         fPreviousSysInfo = sysInfo; // Store initial system_info
-        for (uint32 i = 0; i < sysInfo.cpu_count; ++i) {
-            fPreviousIdleTime[i] = sysInfo.cpu_infos[i].active_time; // Actually active time
+        fCpuCount = sysInfo.cpu_count;
+        if (fCpuCount > 0) {
+            fPreviousIdleTime = new bigtime_t[fCpuCount];
+            // It's good practice to check if new returned NULL, though unlikely on modern systems
+            // if (fPreviousIdleTime == NULL) { /* Handle allocation error */ }
+            for (uint32 i = 0; i < fCpuCount; ++i) {
+                fPreviousIdleTime[i] = sysInfo.cpu_infos[i].active_time; // Actually active time
+            }
+        } else {
+            // No CPUs reported, or error. fPreviousIdleTime remains NULL.
+            fOverallUsageValue->SetText("No CPU data");
         }
     } else {
         // Handle error - perhaps disable CPU view or show an error message
         fOverallUsageValue->SetText("Error fetching CPU info");
+        // fPreviousIdleTime remains NULL, fCpuCount remains 0
     }
-
 
     // Placeholder for graphs - will be a separate custom view
     // BView* graphView = new BView(BRect(0,0,100,50), "cpuGraph", B_FOLLOW_ALL, B_WILL_DRAW);
@@ -49,6 +62,8 @@ CPUView::CPUView(BRect frame)
 
 CPUView::~CPUView() {
     // Any cleanup
+    delete[] fPreviousIdleTime;
+    fPreviousIdleTime = NULL; // Good practice
 }
 
 void CPUView::AttachedToWindow() {
@@ -63,6 +78,11 @@ void CPUView::Pulse() {
 }
 
 void CPUView::GetCPUUsage(float* overallUsage) {
+    if (fCpuCount == 0 || fPreviousIdleTime == NULL) {
+        *overallUsage = -1.0f; // Indicate error or N/A, will be handled by UpdateData
+        return;
+    }
+
     system_info currentSysInfo;
     bigtime_t currentTotalActiveTime = 0;
     bigtime_t previousTotalActiveTime = 0;
