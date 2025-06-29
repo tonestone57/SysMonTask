@@ -17,7 +17,7 @@ def get_data_files():
 
 setup(
     name='sysmontask',
-    version='1.x.x',
+    version='1.4.0',
     description='System Monitor With UI Like Windows',
     url='https://github.com/KrispyCamel4u/SysMonTask',
     author='Neeraj Kumar',
