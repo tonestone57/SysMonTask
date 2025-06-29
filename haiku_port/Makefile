@@ -1,7 +1,7 @@
 # Basic Makefile for SysMonTask Haiku Port
 
 # Application Name
-APP_NAME = SysMonTask
+APP_NAME = SysMonTaskHaiku
 
 # Sources
 SRCS = SysMonTaskApp.cpp

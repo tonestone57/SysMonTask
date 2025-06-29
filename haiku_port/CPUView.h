@@ -32,8 +32,9 @@ private:
 
     // For calculating CPU usage
     system_info fPreviousSysInfo;
-    bigtime_t fPreviousIdleTime[B_MAX_CPU_COUNT];
-    bool fFirstTime;
+    bigtime_t*  fPreviousIdleTime; // Dynamically allocated array
+    uint32      fCpuCount;         // Number of CPUs
+    bool        fFirstTime;
 
     BLocker fLocker; // For thread safety if needed for data updates
 };
