@@ -35,6 +35,7 @@ private:
     bigtime_t*  fPreviousIdleTime; // Dynamically allocated array
     uint32      fCpuCount;         // Number of CPUs
     bool        fFirstTime;
+    bigtime_t   fPreviousTime;
 
     BLocker fLocker; // For thread safety if needed for data updates
 };

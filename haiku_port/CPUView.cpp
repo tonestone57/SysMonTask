@@ -84,72 +84,27 @@ void CPUView::GetCPUUsage(float* overallUsage) {
     }
 
     system_info currentSysInfo;
-    bigtime_t currentTotalActiveTime = 0;
-    bigtime_t previousTotalActiveTime = 0;
-    bigtime_t timeDiff;
-
     if (get_system_info(&currentSysInfo) != B_OK) {
         *overallUsage = -1.0f; // Indicate error
         return;
     }
 
+    bigtime_t currentTime = system_time();
+
     if (fFirstTime) {
         fPreviousSysInfo = currentSysInfo;
+		fPreviousTime = currentTime;
         fFirstTime = false;
         *overallUsage = 0.0f; // No data for first pulse
         // Update previous idle times for next calculation
-        for (uint32 i = 0; i < currentSysInfo.cpu_count; ++i) {
+        for (uint32 i = 0; i < fCpuCount; ++i) {
              fPreviousIdleTime[i] = currentSysInfo.cpu_infos[i].active_time;
         }
         return;
     }
 
-    timeDiff = currentSysInfo.boot_time - fPreviousSysInfo.boot_time; // This is not correct, boot_time is constant
-                                                                      // We need elapsed time. system_time() is wall clock.
-
-    // A more robust way is to sum active_times and subtract from previous sum of active_times
-    // and divide by (elapsed_wall_clock_time * cpu_count)
-
-    bigtime_t elapsedWallTime = system_time() - fPreviousSysInfo.timestamp_for_active_time;
-    // system_info doesn't have a convenient timestamp for its active_time values.
-    // This makes precise interval calculation tricky without BSystemInfo.
-    // Let's try a simplified approach, assuming Pulse interval is somewhat regular.
-    // A better approach would be to use BSystemInfo if available, or track system_time()
-    // manually alongside get_system_info calls.
-
-    // For overall usage:
-    // Sum of (current active_time[i] - previous active_time[i]) for all cores
-    // Divided by (elapsed_time * number_of_cores)
-
-    // Let's use BSystemInfo for a more modern and accurate approach for per-core usage,
-    // which then can be averaged. If this is not available, fallback or different logic is needed.
-
-    float perCoreUsage[B_MAX_CPU_COUNT];
-    cpu_info previousCpuInfos[B_MAX_CPU_COUNT];
-    cpu_info currentCpuInfos[B_MAX_CPU_COUNT];
-    uint32 cpuCount;
-    bigtime_t previousSnapshotTime; // Store the time of the previous snapshot
-
-    // Get CPU info using BSystemInfo (modern Haiku)
-    // This is a simplified example; BSystemInfo::GetCPUInfo might need more setup
-    // or a different approach if not readily giving interval-based percentages.
-    // The most common way on Haiku is still active_time differences.
-
-    // Reverting to the active_time difference method with manual time tracking.
-    bigtime_t currentTimeSnapshot = system_time(); // Wall clock time of this snapshot
-
-    if (fFirstTime) { // Should have been caught earlier, but for safety
-        fPreviousSysInfo = currentSysInfo; // Copy current to previous
-         for (uint32 i = 0; i < currentSysInfo.cpu_count; ++i) {
-            fPreviousIdleTime[i] = currentSysInfo.cpu_infos[i].active_time;
-        }
-        fPreviousSysInfo.timestamp_for_active_time = currentTimeSnapshot; // Store snapshot time
-        fFirstTime = false;
-        *overallUsage = 0.0;
-        return;
-    }
-
-    elapsedWallTime = currentTimeSnapshot - fPreviousSysInfo.timestamp_for_active_time;
+    bigtime_t elapsedWallTime = currentTime - fPreviousTime;
+	fPreviousTime = currentTime;
 
     if (elapsedWallTime <= 0) { // Time hasn't advanced or error
         *overallUsage = 0.0; // Or previous value
@@ -157,15 +112,15 @@ void CPUView::GetCPUUsage(float* overallUsage) {
     }
 
     float totalDeltaActiveTime = 0;
-    for (uint32 i = 0; i < currentSysInfo.cpu_count; ++i) {
+    for (uint32 i = 0; i < fCpuCount; ++i) {
         bigtime_t deltaCoreActiveTime = currentSysInfo.cpu_infos[i].active_time - fPreviousIdleTime[i];
         totalDeltaActiveTime += deltaCoreActiveTime;
         fPreviousIdleTime[i] = currentSysInfo.cpu_infos[i].active_time; // Update for next round
     }
 
     // Overall usage: (total change in active time across all cores) / (wall time elapsed * number of cores)
-    if (currentSysInfo.cpu_count > 0) {
-        *overallUsage = (float)totalDeltaActiveTime / (elapsedWallTime * currentSysInfo.cpu_count) * 100.0f;
+    if (fCpuCount > 0) {
+        *overallUsage = (float)totalDeltaActiveTime / (elapsedWallTime * fCpuCount) * 100.0f;
     } else {
         *overallUsage = 0.0f;
     }
@@ -173,9 +128,6 @@ void CPUView::GetCPUUsage(float* overallUsage) {
     // Clamp usage between 0 and 100
     if (*overallUsage < 0.0f) *overallUsage = 0.0f;
     if (*overallUsage > 100.0f) *overallUsage = 100.0f; // Can happen due to timing/precision
-
-    // Update previous system info snapshot time for the next calculation
-    fPreviousSysInfo.timestamp_for_active_time = currentTimeSnapshot;
 }
 
 
